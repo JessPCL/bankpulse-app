@@ -1,0 +1,28 @@
+<!-- MVC-BP-07 - Vista detalle.ejs (HU-BP-02): franjas disponibles y formulario de reserva (HU-BP-03) -->
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>BANKPULSE - Franjas</title>
+<style>body{font-family:Arial,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#222}h1{color:#1f3864}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #bbb;padding:.4rem .6rem;text-align:left}th{background:#d9e2f3}.error{background:#fde8e8;border-left:4px solid #c0392b;padding:.6rem 1rem}.ok{background:#e7f6ec;border-left:4px solid #2e8b57;padding:.6rem 1rem}input,button{padding:.35rem;margin:.15rem}a{color:#2e5597}</style></head><body>
+<h1><%= locals.restaurante ? restaurante.nombre : 'Restaurante' %></h1>
+<% if (locals.restaurante) { %><p><%= restaurante.direccion %></p>
+<form method="get" action="/restaurantes/<%= restaurante.id %>/franjas">
+  Fecha <input type="date" name="fecha" value="<%= (locals.consulta && consulta.fecha) || '' %>">
+  Desde la hora <input type="time" name="hora" value="<%= (locals.consulta && consulta.hora) || '' %>">
+  <button type="submit">Filtrar</button>
+</form><% } %>
+<% if (locals.error) { %><div class="error"><strong><%= error %></strong><ul><% (locals.detalle || []).forEach(function(d){ %><li><%= d %></li><% }) %></ul></div><% } %>
+<% if (locals.franjas && franjas.length === 0) { %><div class="ok">No hay franjas con cupo para ese filtro.</div><% } %>
+<% if (locals.franjas && franjas.length) { %>
+<table><tr><th>Hora</th><th>Cupos</th><th>Precio por persona</th><th>Reservar y pagar</th></tr>
+<% franjas.forEach(function(f){ %>
+<tr><td><%= f.hora %></td><td><%= f.cupos_disponibles %></td><td>USD <%= f.precio_por_persona %></td>
+<td><form method="post" action="/reservas">
+  <input type="hidden" name="franja_id" value="<%= f.id %>">
+  <input type="hidden" name="clave_idempotencia" value="<%= f.clave_sugerida %>">
+  Cliente <input name="cliente_id" value="1" size="2">
+  Comensales <input name="comensales" value="2" size="2">
+  Token <input name="token_pago" value="tok_demo" size="10">
+  <button type="submit">Reservar</button></form></td></tr>
+<% }) %></table>
+<% } %>
+<p><a href="/restaurantes">&larr; Volver a la busqueda</a></p>
+</body></html>

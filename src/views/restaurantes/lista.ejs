@@ -1,0 +1,21 @@
+<!-- MVC-BP-06 - Vista lista.ejs (HU-BP-01) -->
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>BANKPULSE - Restaurantes cercanos</title>
+<style>body{font-family:Arial,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#222}h1{color:#1f3864}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #bbb;padding:.4rem .6rem;text-align:left}th{background:#d9e2f3}.error{background:#fde8e8;border-left:4px solid #c0392b;padding:.6rem 1rem}.ok{background:#e7f6ec;border-left:4px solid #2e8b57;padding:.6rem 1rem}input,button{padding:.35rem;margin:.15rem}a{color:#2e5597}</style></head><body>
+<h1>BANKPULSE &middot; Experiencias gastronomicas</h1>
+<form method="get" action="/restaurantes">
+  Latitud <input name="lat" value="<%= (locals.consulta && consulta.lat) || '-0.18' %>" size="8">
+  Longitud <input name="lng" value="<%= (locals.consulta && consulta.lng) || '-78.48' %>" size="8">
+  Radio (km) <input name="radio_km" value="<%= (locals.consulta && consulta.radio_km) || '5' %>" size="4">
+  <button type="submit">Buscar</button>
+</form>
+<% if (locals.error) { %><div class="error"><strong><%= error %></strong><ul><% (locals.detalle || []).forEach(function(d){ %><li><%= d %></li><% }) %></ul></div><% } %>
+<% if (locals.mensaje) { %><div class="ok"><%= mensaje %></div><% } %>
+<% if (locals.restaurantes && restaurantes.length) { %>
+<table><tr><th>Restaurante</th><th>Direccion</th><th>Distancia</th><th></th></tr>
+<% restaurantes.forEach(function(r){ %>
+<tr><td><%= r.nombre %></td><td><%= r.direccion %></td><td><%= r.distancia_km %> km</td>
+<td><a href="/restaurantes/<%= r.id %>/franjas">Ver franjas</a></td></tr>
+<% }) %></table>
+<% } %>
+</body></html>
