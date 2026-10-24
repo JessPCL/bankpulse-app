@@ -1,0 +1,124 @@
+name: CI BANKPULSE
+
+# Integración continua: en cada push a main y en cada Pull Request hacia main
+# 1) corre las pruebas de las historias contra un PostgreSQL real y
+# 2) construye y levanta el entorno Docker Compose y comprueba /health y las pruebas dentro del contenedor.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-bankpulse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Pruebas de las historias (Node 20 + PostgreSQL 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: bankpulse
+          POSTGRES_USER: bankpulse_user
+          POSTGRES_PASSWORD: ci_password_no_secreto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bankpulse_user -d bankpulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: bankpulse
+      DB_USER: bankpulse_user
+      DB_PASSWORD: ci_password_no_secreto
+      PORT: 3000
+      BASE_URL: http://localhost:3000
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias (npm ci)
+        run: npm ci
+
+      - name: Cargar esquema y datos semilla
+        run: psql -h localhost -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f db/init.sql
+        env:
+          PGPASSWORD: ${{ env.DB_PASSWORD }}
+
+      - name: Iniciar la API
+        run: |
+          nohup node src/app.js > api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS "$BASE_URL/health" > /dev/null; then echo "API lista"; exit 0; fi
+            sleep 1
+          done
+          echo "La API no respondió en 30 s"; cat api.log; exit 1
+
+      - name: Probar GET /health
+        run: curl -fsS "$BASE_URL/health"
+
+      - name: Pruebas de humo (historias del Sprint 1)
+        run: node scripts/smoke.js all
+
+      - name: Guardar logs de la API si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-log
+          path: api.log
+
+  docker:
+    name: Entorno Docker Compose (bankpulse-api + bankpulse-db)
+    runs-on: ubuntu-latest
+    needs: pruebas
+    timeout-minutes: 15
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Crear .env a partir de .env.example
+        run: cp .env.example .env
+
+      - name: Construir y levantar los contenedores (espera a que estén saludables)
+        run: docker compose up --build -d --wait --wait-timeout 120
+
+      - name: Estado de los servicios
+        run: docker compose ps
+
+      - name: Probar GET /health desde el host
+        run: curl -fsS http://localhost:3001/health
+
+      - name: Pruebas de humo dentro del contenedor bankpulse-api
+        run: docker compose exec -T bankpulse-api node scripts/smoke.js all
+
+      - name: Guardar logs de Compose
+        if: always()
+        run: docker compose logs --no-color > compose.log
+
+      - name: Subir logs de Compose
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-log
+          path: compose.log
+
+      - name: Apagar y limpiar
+        if: always()
+        run: docker compose down -v
